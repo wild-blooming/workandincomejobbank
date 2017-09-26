@@ -1,7 +1,9 @@
+import pymysql
 import re
 import requests
 from bs4 import BeautifulSoup
 
+#cookies
 jar = requests.cookies.RequestsCookieJar()
 jar.set('ASP.NET_SessionId','zcbbo0551pspxk55vs12s245',domain='job-bank.workandincome.govt.nz',path='/')
 jar.set('TS015cea2c','014cf3b645b65b52d67bd0e655a7561d2f4ebe47967a122b5998ea40ecdc86fadc5ed62db34931660709ed7f4c88e4fc8a8f7f42c0',domain='job-bank.workandincome.govt.nz',path='/')
@@ -26,31 +28,47 @@ payload = {'__EVENTTARGET':'',
 		
 
 r = requests.post(url,cookies=jar,data=payload,headers=headers) #Object moved to,302,URL redirect
-soup = BeautifulSoup(r.text,'lxml') 
-table = soup.find_all('table')[0]
-print table
 
-#storing data
-
+#connect mysql
+conn = pymysql.connect(host='127.0.0.1',unix_socket='/tmp/mysql.sock',user='root',passwd='asdf1234*',db='mysql')
+cur = conn.cursor()
+cur.execute("USE workandincome")
+#define recur,traversing all pages
 def next(res):
 	soup = BeautifulSoup(res.text,'lxml')
+	#do something here
+	table = soup.find_all('table')[0]
+	print soup.find('div',class_='paging').span.string
+#	print table
+	for row in table.find_all('tr'):
+#		print row
+		has_td = row.find_all('td')
+		if len(has_td) != 0:
+			values = []
+			for string in row.stripped_strings:
+				values.append(string)
+	#		print values
+			sql = "INSERT INTO jobbank_auckland (title,added,category,area) VALUES (%s,%s,%s,%s)"
+			cur.execute(sql,values)
+		##		find('th') as table cols
+##		print col if not empty,extract JobId as primary key,strip string
+#		cols = row.find_all('td')
+#		if len(cols) != 0:	#remove <th> row
+##			print cols
+#			for col in cols:
+#				for string in col.stripped_strings:
+#					print (string)
+
 	next_page = soup.find('a',string=re.compile("^Next"))
 	if(next_page):
-		next(requests.get('http://job-bank.workandincome.govt.nz/find-a-job/' + next_page['href'],cookies=jar) 
-next(r);
 
+		#return to initial page if request without cookies 
+		#ASP.NET est a unique session for user during visit,track a session id,map the user to session state information,store user specific info
+		next(requests.get('http://job-bank.workandincome.govt.nz/find-a-job/' + next_page['href'],cookies=jar)) 
 
-find_next = soup.find('a',string=re.compile("^Next"))
-if(find_next):
-	print find_next['href']
+next(r)
 
-	#return to initial page if request without cookies 
-	#ASP.NET est a unique session for user during visit,track a session id,map the user to session state information,store user specific info
-	next_page = requests.get('http://job-bank.workandincome.govt.nz/find-a-job/' + find_next['href'],cookies=jar) 
-	print next_page.text
-
-#while a have Next,request Next Page
-#for link in soup.find_all('a'):
-#	print link.get('href')
-#	print link.get_text()
-
+cur.connection.commit()
+#close mysql
+cur.close()
+conn.close()
