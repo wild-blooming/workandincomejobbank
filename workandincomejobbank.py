@@ -33,6 +33,7 @@ r = requests.post(url,cookies=jar,data=payload,headers=headers) #Object moved to
 conn = pymysql.connect(host='127.0.0.1',unix_socket='/tmp/mysql.sock',user='root',passwd='asdf1234*',db='mysql')
 cur = conn.cursor()
 cur.execute("USE workandincome")
+
 #define recur,traversing all pages
 def next(res):
 	soup = BeautifulSoup(res.text,'lxml')
@@ -44,20 +45,19 @@ def next(res):
 #		print row
 		has_td = row.find_all('td')
 		if len(has_td) != 0:
-			values = []
+
+			#extract JobId from 1st <td>
+			match = re.search('\d+',has_td[0].a['href'])
+			if match:
+				JobId = match.group(0)
+
+			values = [int(JobId)]
 			for string in row.stripped_strings:
 				values.append(string)
-	#		print values
-			sql = "INSERT INTO jobbank_auckland (title,added,category,area) VALUES (%s,%s,%s,%s)"
+			print values
+			sql = "INSERT INTO jobbankauckland (jobid,title,added,category,area) VALUES (%s,%s,%s,%s,%s)" #TypeError: %d format: a number is required, not str
+
 			cur.execute(sql,values)
-		##		find('th') as table cols
-##		print col if not empty,extract JobId as primary key,strip string
-#		cols = row.find_all('td')
-#		if len(cols) != 0:	#remove <th> row
-##			print cols
-#			for col in cols:
-#				for string in col.stripped_strings:
-#					print (string)
 
 	next_page = soup.find('a',string=re.compile("^Next"))
 	if(next_page):
@@ -71,4 +71,4 @@ next(r)
 cur.connection.commit()
 #close mysql
 cur.close()
-conn.close()
+#conn.close()
